@@ -47,7 +47,6 @@ def create_connection():
     connection = None
     try:
         connection = mysql.connector.connect(**db_config)
-        logging.info(f"Ошибка при соединении с сервером: {e}")
     except Error as e:
         logging.error(f"Ошибка при соединении с сервером: {e}")
     return connection
