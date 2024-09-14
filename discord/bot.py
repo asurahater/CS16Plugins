@@ -52,7 +52,7 @@ async def status_task():
     try:
     		srv.execute("ultrahc_ds_get_info")
     except Exception as e:
-    		logging.info(f'Удаленный сервер не отвечает')
+    		logging.error(f"Ошибка при соединении с сервером: {e}")
     
 @status_task.before_loop
 async def before_status_task():

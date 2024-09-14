@@ -72,6 +72,10 @@ async def remove(interaction: discord.Interaction):
 
     # Создаем подключение к базе данных
     connection = create_connection()
+    if not connection:
+    	await interaction.response.send_message(f'Нет соединения с базой данных', ephemeral=True)
+    	return
+    
     cursor = connection.cursor()
 
     # Удаляем запись из базы данных
@@ -83,7 +87,7 @@ async def remove(interaction: discord.Interaction):
     if cursor.rowcount > 0:
         await interaction.response.send_message(f'Данные для вашего аккаунта успешно удалены.', ephemeral=True)
     else:
-        await interaction.response.send_message(f'Ошибка: Данные для вашего аккаунта не найдены.', ephemeral=True)
+        await interaction.response.send_message(f'Данные для вашего аккаунта не найдены.', ephemeral=True)
 
     cursor.close()
     connection.close()
@@ -165,5 +169,5 @@ async def kick(interaction: discord.Interaction, player_nick: str, reason: str):
     except Exception as e:
         logging.error(f"Ошибка при кике игрока: {e}")
         await interaction.response.send_message('Ошибка при кике игрока. Проверьте логи.', ephemeral=True)
-
+O
 #-------------------------------------------------------------------

@@ -30,6 +30,9 @@ def check_api_key(request):
 
 def get_discord_id_by_steam_id(steam_id):
     connection = create_connection()
+    if not connection:
+    	return
+    
     cursor = connection.cursor()
     query = "SELECT discord_id FROM users WHERE steam_id = %s"
     cursor.execute(query, (steam_id,))
@@ -44,14 +47,17 @@ def create_connection():
     connection = None
     try:
         connection = mysql.connector.connect(**db_config)
-        print("Подключение к MySQL успешно")
+        logging.info(f"Ошибка при соединении с сервером: {e}")
     except Error as e:
-        print(f"Ошибка '{e}' при подключении к MySQL")
+        logging.error(f"Ошибка при соединении с сервером: {e}")
     return connection
     
 # Проверка существования записи в базе данных
 def record_exists(user_id, steam_id):
     connection = create_connection()
+    if not connection:
+    	return
+    
     cursor = connection.cursor()
     query = "SELECT COUNT(*) FROM users WHERE discord_id = %s OR steam_id = %s"
     cursor.execute(query, (user_id, steam_id))
@@ -63,6 +69,9 @@ def record_exists(user_id, steam_id):
 # Сохранение сообщения в базу данных
 def save_message(user_id, username, ds_username, steam_id):
     connection = create_connection()
+    if not connection:
+    	return
+    
     cursor = connection.cursor()
     query = "INSERT INTO users (discord_id, ds_name, ds_display_name, steam_id) VALUES (%s, %s, %s, %s)"
     cursor.execute(query, (user_id, username, ds_username, steam_id))
@@ -164,7 +173,6 @@ async def handle_message(data):
             prefix = ""
 
         formatted_message = format_message(nick, cs_message, team, prefix + channel_prefix)
-        logging.info(f"Сообщение из CS: {formatted_message}")
 
         can_add_to_current = False
 
@@ -198,7 +206,6 @@ async def handle_message(data):
                 else:
                     # Отправляем новое сообщение
                     current_message = await channel.send(f"```ansi\n{formatted_message}```")
-                    logging.info("Новое сообщение отправлено в Discord")
                     line_count = 1  # Сбрасываем счётчик строк
                     user_message_received = False  # Сбрасываем флаг пользователя
             except Exception as e:
@@ -214,7 +221,6 @@ async def handle_notify(data):
         if admin_channel:
             formatted_notify_message = f"```ansi\nСообщение от \x1b[34m{username}\x1b[0m: {notify_message}```"
             await admin_channel.send(formatted_notify_message)
-            logging.info(f"Уведомление отправлено в админ-канал: {formatted_notify_message}")
         else:
             logging.error("Канал для админов не найден. Проверьте правильность ADMIN_CHANNEL_ID в config.py.")
 
@@ -236,7 +242,6 @@ async def handle_info(data):
     				current_status = await current_status.edit(content=new_content)
     		else:
        			current_status = await channel.send(f"```ansi\n{formatted_info}```")
-        		logging.info("Информация о сервере успешно отправлена в Discord")
     else:
         logging.error("Канал не найден. Проверьте правильность INFO_CHANNEL_ID в config.py.")
 
@@ -244,8 +249,6 @@ async def handle_webhook(request):
     # Проверяем API-ключ перед обработкой запроса
     if not check_api_key(request):
         return web.Response(text='Unauthorized', status=401)
-
-    logging.info("Получен вебхук")
 
     data = await request.json()
     message_type = data.get('type')  # Получаем тип сообщения
