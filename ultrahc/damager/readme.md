@@ -1,4 +1,4 @@
-```md
+
 # ULTRAHC Damager Plugin
 
 ### Version: 0.1
@@ -92,4 +92,4 @@ The **ULTRAHC Damager** plugin for AMX Mod X tracks the total damage dealt by a 
 
 - Добавление опций настройки времени сброса и форматов HUD.
 - Внедрение звуковых уведомлений при отображении урона.
-```
+
