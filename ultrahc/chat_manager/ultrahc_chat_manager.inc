@@ -29,3 +29,28 @@ native ultrahc_is_pref_file_load();
  * @return nothing
  */
 native ultrahc_sql_chat_insert(player_id, player_name[], player_name_size, player_team, channel[], message[], message_size, msg_color);
+
+
+/**
+ * add prefix
+ *
+ * @param client_id             Client id
+ * @param prefix             		Prefix
+ * @param overwrite             if no space for prefix
+ * @param overwrite_idx         if overwrite 1
+ *
+ * @return nothing
+ */
+native ultrahc_add_prefix(client_id, prefix[], overwrite=0, overwrite_idx=0);
+
+/**
+ * make sql request
+ *
+ * @param client_id             Client id
+ * @param prefix             		Prefix
+ * @param overwrite             if no space for prefix
+ * @param overwrite_idx         if overwrite 1
+ *
+ * @return nothing
+ */
+native ultrahc_make_sql_request(sql_request[], buffer[]);
