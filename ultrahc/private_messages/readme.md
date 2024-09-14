@@ -41,7 +41,6 @@ The **ULTRAHC Private Messages** plugin for AMX Mod X allows players on a Counte
 
 ## Future Improvements
 
-- Add support for two-way messaging.
 - Allow for customization of message formatting and additional recipient search options.
 
 ---
@@ -89,5 +88,4 @@ The **ULTRAHC Private Messages** plugin for AMX Mod X allows players on a Counte
 
 ## Будущие улучшения
 
-- Добавить поддержку двустороннего общения.
 - Добавить возможности кастомизации формата сообщений и улучшить поиск получателей.
