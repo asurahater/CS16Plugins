@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from discord.ext import tasks
 from aiohttp import web
 import logging
 import config  # Импортируем файл config.py
@@ -11,12 +12,12 @@ from mysql.connector import Error
 # Настройки базы данных
 db_config = {
     'host': 'localhost',
-    'database': '',
+    'database': 'counter_strike_test',
     'user': 'root',  # Замените на ваше имя пользователя
     'password': ''  # Замените на ваш пароль
 }
 
-srv = Console(host='127.0.0.1', password='')
+srv = Console(host='127.0.0.1', password='12345')
 srv.connect()
 
 # Настройка логирования
@@ -24,6 +25,7 @@ logging.basicConfig(level=logging.INFO)
 
 intents = discord.Intents.default()
 intents.message_content = True
+intents.members = True
 
 # Создание подключения к базе данных
 def create_connection():
@@ -47,11 +49,11 @@ def record_exists(user_id, steam_id):
     return count > 0
 
 # Сохранение сообщения в базу данных
-def save_message(user_id, username, steam_id):
+def save_message(user_id, username, ds_username, steam_id):
     connection = create_connection()
     cursor = connection.cursor()
-    query = "INSERT INTO users (discord_id, ds_name, steam_id) VALUES (%s, %s, %s)"
-    cursor.execute(query, (user_id, username, steam_id))
+    query = "INSERT INTO users (discord_id, ds_name, ds_display_name, steam_id) VALUES (%s, %s, %s, %s)"
+    cursor.execute(query, (user_id, username, ds_username, steam_id))
     connection.commit()
     cursor.close()
     connection.close()
@@ -59,6 +61,7 @@ def save_message(user_id, username, steam_id):
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 current_message = None
+current_status = None
 line_count = 0
 MAX_LINES = 50
 MAX_CHAR_LIMIT = 2000  # Лимит символов в Discord для одного сообщения
@@ -110,6 +113,46 @@ def get_discord_id_by_steam_id(steam_id):
     connection.close()
     
     return result[0] if result else None
+
+#-------------------------------------------------------------------
+#-- Форматирование сообщения с информацией о сервере
+#-------------------------------------------------------------------
+def format_info_message(map_name, current_players, max_players):
+    player_count = len(current_players) - 1  # Убираем последний элемент "null"
+    team_players = {1: [], 2: [], 3: []}  # Словарь для хранения игроков по командам
+
+    # Группируем игроков по командам
+    for player in current_players[:-1]:  # Убираем последний элемент "null"
+        player_name = player['name']
+        stats = player['stats']
+        team = stats[2]
+        frags = stats[0]
+        deaths = stats[1]
+
+        # Добавляем игрока в соответствующую команду
+        if team in team_players:
+            team_players[team].append(f"{player_name} - {frags}/{deaths}")
+
+    # Создаем сообщение
+    formatted_info = []
+    formatted_info.append(f"Название карты: {map_name}")
+    formatted_info.append(f"Количество игроков: {player_count} / {max_players}")
+
+    # Форматируем команды с цветами
+    formatted_info.append("\n\033[1m\033[31mTerrorists:\033[0m")
+    formatted_info.append("\n".join(team_players[1]) if team_players[1] else "Нет игроков")
+    # formatted_info.append("\n".join([f"\033[31m{player}\033[0m" for player in team_players[1]]) if team_players[1] else "Нет игроков")
+    
+    formatted_info.append("\n\033[1m\033[34mCounter-Terrorists:\033[0m")
+    formatted_info.append("\n".join(team_players[2]) if team_players[2] else "Нет игроков")
+		# formatted_info.append("\n".join([f"\033[34m{player}\033[0m" for player in team_players[2]]) if team_players[2] else "Нет игроков")
+    
+    formatted_info.append("\n\033[1m\033[37mSpectators:\033[0m")
+    formatted_info.append("\n".join(team_players[3]) if team_players[3] else "Нет игроков")
+		# formatted_info.append("\n".join([f"\033[37m{player}\033[0m" for player in team_players[3]]) if team_players[3] else "Нет игроков")
+
+    return "\n".join(formatted_info)
+
 
 
 #-------------------------------------------------------------------
@@ -192,6 +235,28 @@ async def handle_notify(data):
         else:
             logging.error("Канал для админов не найден. Проверьте правильность ADMIN_CHANNEL_ID в config.py.")
 
+async def handle_info(data):
+    global current_status
+    
+    map_name = data.get('map')
+    current_players = data.get('current_players', [])
+    max_players = data.get('max_players')
+
+    # Форматируем сообщение
+    formatted_info = format_info_message(map_name, current_players, max_players)
+
+    # Отправляем сообщение в Discord
+    channel = bot.get_channel(config.INFO_CHANNEL_ID)
+    if channel:
+    		if current_status:
+    				new_content = f"```ansi\n{formatted_info}```"
+    				current_status = await current_status.edit(content=new_content)
+    		else:
+       			current_status = await channel.send(f"```ansi\n{formatted_info}```")
+        		logging.info("Информация о сервере успешно отправлена в Discord")
+    else:
+        logging.error("Канал не найден. Проверьте правильность INFO_CHANNEL_ID в config.py.")
+
 async def handle_webhook(request):
     # Проверяем API-ключ перед обработкой запроса
     if not check_api_key(request):
@@ -206,6 +271,8 @@ async def handle_webhook(request):
         await handle_message(data)
     elif message_type == 'notify':
         await handle_notify(data)
+    elif message_type == 'info':
+        await handle_info(data)
 
     return web.Response(text='OK')
     
@@ -230,16 +297,25 @@ async def on_message(message):
 
     await bot.process_commands(message)
 
-async def run_webserver():
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', 8080)
-    await site.start()
-
 @bot.event
-async def on_ready():
-    logging.info(f'Бот {bot.user.name} успешно запущен!')
-    bot.loop.create_task(run_webserver())
+async def on_member_update(before, after):
+    # Проверяем, изменилось ли имя пользователя
+    if before.display_name != after.display_name:
+        # Создаем подключение к базе данных
+        connection = create_connection()
+        cursor = connection.cursor()
+        
+        # Обновляем ds_display_name в базе данных
+        query = "UPDATE users SET ds_display_name = %s WHERE discord_id = %s"
+        cursor.execute(query, (after.display_name, str(after.id)))
+        connection.commit()
+        
+        cursor.close()
+        connection.close()
+        
+        logging.info(f"Обновлено ds_display_name для {after.display_name} (Discord ID: {after.id})")
+
+
 
 #-------------------------------------------------------------------
 #-- Общие команды
@@ -273,13 +349,14 @@ async def reg(interaction: discord.Interaction, steam_id: str):
     
     user_id = str(interaction.user.id)
     username = interaction.user.name
+    ds_username = interaction.user.display_name
 
     # Проверяем, существует ли запись
     if record_exists(user_id, steam_id):
         await interaction.response.send_message(f'Ошибка: Данные для Steam ID {steam_id} или вашего аккаунта уже существуют.', ephemeral=True)
     else:
         # Сохраняем сообщение в базу данных
-        save_message(user_id, username, steam_id)
+        save_message(user_id, username, ds_username, steam_id)
         await interaction.response.send_message(f'Данные сохранены: {username}')
 
 #-- /remove
@@ -311,10 +388,30 @@ async def remove(interaction: discord.Interaction):
     connection.close()
 
 #-------------------------------------------------------------------
+#-- Команды для status
+#-------------------------------------------------------------------
+
+#-- /status
+#-- Получает информацию о сервере
+@bot.tree.command(name="status", description="Получает информацию о сервере.")
+@commands.has_permissions(manage_messages=True)  # Проверка прав пользователя
+async def status(interaction: discord.Interaction):
+    if interaction.channel.id != config.INFO_CHANNEL_ID:
+        return  # Отключаем выполнение команды в других каналах
+    
+    # Отправляем команду на сервер
+    try:
+        srv.execute("ultrahc_ds_get_info")  # Выполняем команду на сервере
+        await interaction.response.send_message('Команда выполнена.', ephemeral=True, delete_after=0)
+    except Exception as e:
+        logging.error(f"Ошибка при получении статуса сервера: {e}")
+        await interaction.response.send_message('Ошибка при получении статуса сервера. Проверьте логи.', ephemeral=True)
+
+#-------------------------------------------------------------------
 #-- Команды для server manager
 #-------------------------------------------------------------------
 
-#-- /srv_change_map
+#-- /change_map
 #-- Меняет карту
 #-- @params: map_name
 @bot.tree.command(name="change_map", description="Меняет карту на удаленном сервере.")
@@ -367,6 +464,28 @@ async def kick(interaction: discord.Interaction, player_nick: str, reason: str):
     except Exception as e:
         logging.error(f"Ошибка при кике игрока: {e}")
         await interaction.response.send_message('Ошибка при кике игрока. Проверьте логи.', ephemeral=True)
+
+#-------------------------------------------------------------------
+
+async def run_webserver():
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', 8080)
+    await site.start()
+
+@bot.event
+async def on_ready():
+    logging.info(f'Бот {bot.user.name} успешно запущен!')
+    bot.loop.create_task(run_webserver())
+    status_task.start()
+    
+@tasks.loop(seconds=config.STATUS_INTERVAL)  # Задача будет выполняться каждые 10 секунд
+async def status_task():
+    srv.execute("ultrahc_ds_get_info")
+    
+@status_task.before_loop
+async def before_status_task():
+    await bot.wait_until_ready()
 
 # Регистрация команд
 @bot.event
