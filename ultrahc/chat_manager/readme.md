@@ -6,14 +6,13 @@
 
 ## Overview
 
-The **ULTRAHC Chat Manager** plugin for AMX Mod X enhances the chat functionality on your Counter-Strike 1.6 server by providing custom prefixes, managing chat visibility, and integrating with SQL and Discord webhooks for advanced features. This plugin allows for a highly customizable chat experience, including prefix assignment, message formatting, and team-based chat visibility.
+The **ULTRAHC Chat Manager** plugin for AMX Mod X enhances the chat functionality on your Counter-Strike 1.6 server by providing custom prefixes, managing chat visibility, and integrating with SQL. This plugin allows for a highly customizable chat experience, including prefix assignment, message formatting, and team-based chat visibility.
 
 ## Features
 
 - **Custom Prefixes**: Assign up to 4 custom prefixes to each player, with support for Steam, name-based, or flag-based prefixes.
 - **Chat Management**: Control who can see specific chats, including dead/alive and team chat segregation.
 - **SQL Integration**: Save chat logs to a MySQL database for analytics or tracking purposes.
-- **Discord Webhooks**: Optionally send chat messages to a Discord channel using webhooks.
 - **Configurable Cvars**: Various configuration options to control prefix format, visibility, and more.
 
 ## Installation
@@ -28,7 +27,6 @@ The **ULTRAHC Chat Manager** plugin for AMX Mod X enhances the chat functionalit
 
 - **Prefix System**: Players can have up to 4 custom prefixes, which are displayed in chat messages.
 - **SQL Integration**: Chat messages can be saved in a MySQL database for future retrieval.
-- **Discord Integration**: Chat messages are also sent to a Discord channel using a webhook, allowing for real-time updates outside the game.
 - **Cvars**: Administrators can configure the behavior of the plugin through Cvars, such as toggling SQL integration, controlling which teams can see which messages, and more.
 
 ## Configuration
@@ -43,12 +41,12 @@ The **ULTRAHC Chat Manager** plugin for AMX Mod X enhances the chat functionalit
 ## Changelog
 
 **v0.5**:
-- Initial release with chat management, SQL integration, and Discord webhook support.
+- Initial release with chat management, SQL integration.
 
 ## Future Improvements
 
 - Add more flexible options for prefix customization.
-- Implement advanced filtering for SQL logs and Discord messages.
+- Implement advanced filtering for SQL logs.
 
 ---
 
@@ -60,14 +58,13 @@ The **ULTRAHC Chat Manager** plugin for AMX Mod X enhances the chat functionalit
 
 ## Описание
 
-**ULTRAHC Chat Manager** — это плагин для AMX Mod X, который улучшает функциональность чата на сервере Counter-Strike 1.6. Он позволяет настраивать пользовательские префиксы, управлять видимостью чата, интегрироваться с базой данных SQL для сохранения чатов и отправлять сообщения в Discord через вебхуки. Это обеспечивает высокую кастомизацию чата и контроль за его отображением.
+**ULTRAHC Chat Manager** — это плагин для AMX Mod X, который улучшает функциональность чата на сервере Counter-Strike 1.6. Он позволяет настраивать пользовательские префиксы, управлять видимостью чата, интегрироваться с базой данных SQL для сохранения чатов. Это обеспечивает высокую кастомизацию чата и контроль за его отображением.
 
 ## Особенности
 
 - **Пользовательские префиксы**: Игроки могут иметь до 4 префиксов, основанных на их SteamID, имени или флагах доступа.
 - **Управление чатом**: Управление видимостью чатов, разделение на мертвых/живых и чат команды.
 - **Интеграция с SQL**: Сохранение логов чатов в базу данных MySQL для аналитики и отслеживания.
-- **Отправка в Discord**: Отправка сообщений чата в Discord через вебхуки для реальных обновлений вне игры.
 - **Настраиваемые Cvars**: Различные опции настройки плагина через переменные Cvar.
 
 ## Установка
@@ -82,7 +79,6 @@ The **ULTRAHC Chat Manager** plugin for AMX Mod X enhances the chat functionalit
 
 - **Система префиксов**: Игроки могут иметь до 4 пользовательских префиксов, которые будут отображаться в их сообщениях в чате.
 - **Интеграция с SQL**: Сообщения чата сохраняются в базе данных MySQL для последующего анализа.
-- **Интеграция с Discord**: Сообщения чата отправляются на канал Discord через вебхуки для отображения в реальном времени.
 - **Cvars**: Администраторы могут настраивать поведение плагина с помощью переменных Cvar, таких как включение/выключение SQL, управление видимостью сообщений и многое другое.
 
 ## Настройка
@@ -97,9 +93,9 @@ The **ULTRAHC Chat Manager** plugin for AMX Mod X enhances the chat functionalit
 ## История изменений
 
 **v0.5**:
-- Первоначальный выпуск с управлением чатом, интеграцией SQL и поддержкой вебхуков Discord.
+- Первоначальный выпуск с управлением чатом, интеграцией SQL.
 
 ## Будущие улучшения
 
 - Добавить более гибкие опции настройки префиксов.
-- Реализовать расширенные фильтры для логов SQL и сообщений в Discord.
+- Реализовать расширенные фильтры для логов SQL.
