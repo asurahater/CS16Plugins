@@ -39,7 +39,6 @@ The **ULTRAHC Discord Message Parser** plugin for AMX Mod X allows your Counter-
 ## Future Improvements
 
 - Add support for more advanced message parsing and command handling.
-- Allow for two-way communication, enabling in-game players to send messages to Discord.
 
 ---
 
@@ -84,4 +83,3 @@ The **ULTRAHC Discord Message Parser** plugin for AMX Mod X allows your Counter-
 ## Будущие улучшения
 
 - Добавить поддержку более продвинутого парсинга сообщений и обработки команд.
-- Реализовать двустороннюю связь, позволяя игрокам отправлять сообщения в Discord из игры.
