@@ -141,39 +141,12 @@ public plugin_natives() {
 	register_native("ultrahc_get_prefix", "native_get_prefix");
 	register_native("ultrahc_sql_chat_insert", "native_sql_chat_insert");
 	register_native("ultrahc_add_prefix", "native_add_prefix");
-	register_native("ultrahc_make_sql_request", "native_make_sql_request");
 }
 
 //-----------------------------------------
 
 public bool:native_is_pref_file_load() {
 	return __is_preffile_loaded;
-}
-
-new __callback_func[32];
-public native_make_sql_request() {
-	enum {
-		arg_sql_req = 1, // []
-		arg_handler
-	}
-	
-	new sql_request[512];
-	get_string(arg_sql_req, sql_request, charsmax(sql_request));
-	get_string(arg_handler, __callback_func, charsmax(__callback_func));
-	
-	SQL_ThreadQuery(__sql_handle, "MakeSQLHandler", sql_request, __sql_responce_info, charsmax(__sql_responce_info));
-}
-
-public MakeSQLHandler(failstate, query, error[], errnum, data[], size, queuetime) {
-	if(SQL_NumResults(query) == 0) return;
-
-	new username[64];
-	SQL_ReadResult(query, 0, username, charsmax(username));
-
-	new beg = callfunc_begin(__callback_func, "ultrahc_discord.amxx");
-	callfunc_push_str(username);
-	callfunc_push_int(charsmax(username));
-	new ans = callfunc_end();
 }
 
 public native_add_prefix() {
@@ -316,7 +289,7 @@ public GetPlayerPrefixes(client_id) {
 			msg_color = msg_cmp_color;
 		}
 	}
-	for(new i=0; i<pref_count; i++) {
+	for(new i=0; i<MAX_PREF_PLAYER_HAVE; i++) {
 		copy(__players_prefix_list[client_id][i], __max_prefix_buf, prefix_arr[i]);
 	}
 	
