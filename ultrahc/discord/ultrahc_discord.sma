@@ -1,6 +1,7 @@
 #include <amxmodx>
 #include <ultrahc_chat_manager>
 #include <easy_http>
+#include <sqlx>
 
 #define PLUGIN_NAME 		"ULTRAHC Discord hooks"
 #define PLUGIN_VERSION 	"0.1"
@@ -19,7 +20,12 @@
 
 enum ECvarsList {
 	_webhook_token,
-	_webhook_url
+	_webhook_url,
+	
+	_sql_host,
+	_sql_user,
+	_sql_pass,
+	_sql_db
 }
 
 // U can change it. But be carefully
@@ -36,6 +42,9 @@ new const __saytext_teams[][] = {
 
 new __cvar_str_list[ECvarsList][32];
 
+new __sql_handle;
+new __sql_responce_info[256];
+
 public plugin_init() {
 	register_plugin(PLUGIN_NAME, PLUGIN_VERSION, PLUGIN_AUTHOR);
 	
@@ -48,13 +57,25 @@ public plugin_init() {
 	register_concmd("ultrahc_ds_change_map", "HookChangeMapCmd");
 	register_concmd("ultrahc_ds_kick_player", "HookKickPlayerCmd");
 	
-	register_concmd("ultrahc_ds_notify_cheater", "HookKickPlayerCmd");
+	// register_concmd("ultrahc_ds_notify_cheater", "HookKickPlayerCmd");
 	register_concmd("ultrahc_ds_get_info", "HookGetinfoCmd");
 	
 	bind_pcvar_string(create_cvar("ultrahc_ds_webhook_token", ""), __cvar_str_list[_webhook_token], 32);
 	bind_pcvar_string(create_cvar("ultrahc_ds_webhook_url", ""), __cvar_str_list[_webhook_url], 32);
 	
+	bind_pcvar_string(create_cvar("ultrahc_ds_sql_host", ""), __cvar_str_list[_sql_host], 32);
+	bind_pcvar_string(create_cvar("ultrahc_ds_sql_user", ""), __cvar_str_list[_sql_user], 32);
+	bind_pcvar_string(create_cvar("ultrahc_ds_sql_pass", ""), __cvar_str_list[_sql_pass], 32);
+	bind_pcvar_string(create_cvar("ultrahc_ds_sql_db", ""), __cvar_str_list[_sql_db], 32);
+	
 	AutoExecConfig(true, PLUGIN_CFG_NAME);
+}
+
+//-----------------------------------------
+
+public OnConfigsExecuted() {
+	__sql_handle = SQL_MakeDbTuple(__cvar_str_list[_sql_host], __cvar_str_list[_sql_user], __cvar_str_list[_sql_pass], __cvar_str_list[_sql_db]);
+	SQL_SetCharset(__sql_handle, "utf8");
 }
 
 //-----------------------------------------
@@ -80,11 +101,17 @@ public ClientPutInhandler(client_id) {
 	formatex(sql_request, charsmax(sql_request), "SELECT ds_display_name FROM users WHERE steam_id = '%s'", steam_id);
 	
 	__client_id_save = client_id;
-	ultrahc_make_sql_request(sql_request, "SQLReqHandler");
+	// ultrahc_make_sql_request(sql_request, "SQLReqHandler");
+	SQL_ThreadQuery(__sql_handle, "SQLHandler", sql_request, __sql_responce_info, charsmax(__sql_responce_info));
 }
 
-public SQLReqHandler(data[], size) {
-	ultrahc_add_prefix(__client_id_save, data, 1);
+public SQLHandler(failstate, query, error[], errnum, data[], size, queuetime) {
+	if(SQL_NumResults(query) == 0) return;
+	
+	new username[64];
+	SQL_ReadResult(query, 0, username, charsmax(username));
+
+	ultrahc_add_prefix(__client_id_save, username, 4);
 }
 
 //-----------------------------------------
@@ -293,14 +320,14 @@ public HookGetinfoCmd() {
 //-----------------------------------------
 
 public HookKickPlayerCmd() {
-	new cmd_text[32];
+	new cmd_text[150];
 	read_args(cmd_text, charsmax(cmd_text));
 	
 	new player_to_kick[32];
-	new reason[64];
+	new reason[128];
 	parse(cmd_text, player_to_kick, charsmax(player_to_kick), reason, charsmax(reason));
 	
-	server_cmd("amx_kick %s %s", player_to_kick, reason);
+	server_cmd("amx_kick ^"%s^" ^"%s^"", player_to_kick, reason);
 }
 
 //-----------------------------------------
