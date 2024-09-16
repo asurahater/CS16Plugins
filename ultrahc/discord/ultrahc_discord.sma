@@ -93,7 +93,10 @@ public ClientPutInhandler(client_id) {
 		set_task(1.0, "ClientPutInhandler", client_id);
 		return;
 	}
+	set_task(3.0, "GetMeTime", client_id);	
+}
 	
+public GetMeTime(client_id) {
 	new steam_id[32];
 	get_user_authid(client_id, steam_id, charsmax(steam_id));
 	
