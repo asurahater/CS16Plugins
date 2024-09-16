@@ -6,6 +6,27 @@ from bot_commands import *
 #-------------------------------------------------------------------
 
 @bot.event
+async def on_ready():
+    logging.info(f'Бот {bot.user.name} успешно запущен!')
+    
+    # Подготовка базы данных при запуске
+    setup_database()
+    
+    # Запуск веб-сервера и подключение к CS
+    try:
+        bot.loop.create_task(run_webserver())
+        bot.loop.create_task(connect_to_cs())
+    except Exception as e:
+        logging.error(f"Ошибка при запуске задач: {e}")
+    
+    status_task.start()
+
+# Регистрация команд
+@bot.event
+async def setup_hook():
+    await bot.tree.sync()
+
+@bot.event
 async def on_message(message):
     global user_message_received
 
@@ -24,8 +45,8 @@ async def on_message(message):
 async def on_member_update(before, after):
     if before.display_name != after.display_name:
         try:
-            connection = create_connection()
-            if not connection
+            connection = connect_to_mysql()
+            if not connection:
             	return
             
             cursor = connection.cursor()

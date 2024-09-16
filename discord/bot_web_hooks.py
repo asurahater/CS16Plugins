@@ -4,14 +4,6 @@ from mysql.connector import Error
 import bot
 from bot import *
 
-# Настройки базы данных
-db_config = {
-    'host': 'localhost',
-    'database': 'counter_strike_test',
-    'user': 'root',  # Замените на ваше имя пользователя
-    'password': ''  # Замените на ваш пароль
-}
-
 current_message = None
 current_status = None
 line_count = 0
@@ -29,7 +21,7 @@ def check_api_key(request):
         return False
 
 def get_discord_id_by_steam_id(steam_id):
-    connection = create_connection()
+    connection = connect_to_mysql()
     if not connection:
     	return
     
@@ -42,18 +34,75 @@ def get_discord_id_by_steam_id(steam_id):
     
     return result[0] if result else None
 
-# Создание подключения к базе данных
-def create_connection():
-    connection = None
+# Функция для подключения к MySQL
+def connect_to_mysql():
     try:
-        connection = mysql.connector.connect(**db_config)
-    except Error as e:
-        logging.error(f"Ошибка при соединении с сервером: {e}")
-    return connection
+        conn = mysql.connector.connect(
+            host=config.DB_HOST,
+            user=config.DB_USER,
+            password=config.DB_PASSWORD,
+						database=config.DB_NAME
+        )
+        return conn
+    except mysql.connector.Error as err:
+        if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:
+            logging.error("Неверные данные для подключения к MySQL")
+        else:
+            logging.error(err)
+        return None
+
+# Функция для создания базы данных и таблиц
+def setup_database():
+    conn = connect_to_mysql()
+    if conn is None:
+        return
+    cursor = conn.cursor()
+
+    try:
+        # Создание базы данных, если она не существует
+        cursor.execute(f"CREATE DATABASE IF NOT EXISTS {config.DB_NAME}")
+        conn.database = config.DB_NAME
+        logging.info(f"База данных '{config.DB_NAME}' проверена или создана.")
+
+        # Создание таблиц, если они не существуют
+        create_chat_table = """
+        CREATE TABLE IF NOT EXISTS chat (
+            id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            server_ip TINYTEXT NOT NULL,
+            username TINYTEXT NOT NULL,
+            steam_id TINYTEXT NOT NULL,
+            team ENUM('A', 'T', 'CT', 'S') NOT NULL DEFAULT 'A',
+            datetime DATETIME NOT NULL DEFAULT '2000-05-05 14:13:12',
+            channelmsg TINYTEXT NOT NULL COMMENT 'канал, типа (CT)(DEAD)',
+            prefix TEXT NOT NULL,
+            message TEXT NOT NULL,
+            msg_color ENUM('d', 't', 'g') NOT NULL DEFAULT 'd' COMMENT 'default, as team, green',
+            UNIQUE KEY `index_1` (id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        """
+        create_users_table = """
+        CREATE TABLE IF NOT EXISTS users (
+            id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            discord_id TINYTEXT,
+            ds_name TINYTEXT,
+            ds_display_name TINYTEXT,
+            steam_id TINYTEXT,
+            date_register TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id) USING BTREE
+        ) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4;
+        """
+        cursor.execute(create_chat_table)
+        cursor.execute(create_users_table)
+        logging.info("Таблицы 'chat' и 'users' проверены или созданы.")
+    except mysql.connector.Error as err:
+        logging.error(f"Ошибка при работе с базой данных: {err}")
+    finally:
+        cursor.close()
+        conn.close()
     
 # Проверка существования записи в базе данных
 def record_exists(user_id, steam_id):
-    connection = create_connection()
+    connection = connect_to_mysql()
     if not connection:
     	return
     
@@ -67,7 +116,7 @@ def record_exists(user_id, steam_id):
 
 # Сохранение сообщения в базу данных
 def save_message(user_id, username, ds_username, steam_id):
-    connection = create_connection()
+    connection = connect_to_mysql()
     if not connection:
     	return
     

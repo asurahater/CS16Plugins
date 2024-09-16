@@ -46,6 +46,7 @@ async def connect(interaction: discord.Interaction):
 @bot.tree.command(name="reg", description="Регистрация пользователя с указанием steam_id")
 async def reg(interaction: discord.Interaction, steam_id: str):
     if interaction.channel.id != config.REG_CHANNEL_ID:
+    		await interaction.response.send_message(f'Эта команда доступна только в <@1284218577678766183>', ephemeral=True)
     		return  # Отключаем выполнение команды в других каналах
     
     user_id = str(interaction.user.id)
@@ -66,12 +67,13 @@ async def reg(interaction: discord.Interaction, steam_id: str):
 @bot.tree.command(name="remove", description="Удаляет данные пользователя по Discord ID.")
 async def remove(interaction: discord.Interaction):
     if interaction.channel.id != config.REG_CHANNEL_ID:
+    		await interaction.response.send_message(f'Эта команда доступна только в <@1284218577678766183>', ephemeral=True)
     		return  # Отключаем выполнение команды в других каналах
     
     user_id = str(interaction.user.id)
 
     # Создаем подключение к базе данных
-    connection = create_connection()
+    connection = connect_to_mysql()
     if not connection:
     	await interaction.response.send_message(f'Нет соединения с базой данных', ephemeral=True)
     	return
@@ -102,6 +104,7 @@ async def remove(interaction: discord.Interaction):
 @commands.has_permissions(manage_messages=True)  # Проверка прав пользователя
 async def status(interaction: discord.Interaction):
     if interaction.channel.id != config.INFO_CHANNEL_ID:
+        await interaction.response.send_message(f'Эта команда доступна только в <@1284468786493132862>', ephemeral=True)
         return  # Отключаем выполнение команды в других каналах
     
     # Отправляем команду на сервер
@@ -124,7 +127,8 @@ async def status(interaction: discord.Interaction):
 @commands.has_permissions(manage_messages=True)  # Проверка прав пользователя
 async def srv_change_map(interaction: discord.Interaction, map_name: str = None):
     if interaction.channel.id != config.SRV_MNGR_CHANNEL_ID:
-        return  # Отключаем выполнение команды в других каналах
+        await interaction.response.send_message(f'Эта команда доступна только в <@1284378418082742354>', ephemeral=True)
+        return
     
     # Формируем команду для смены карты
     if map_name:
@@ -135,9 +139,11 @@ async def srv_change_map(interaction: discord.Interaction, map_name: str = None)
     # Отправляем команду на сервер
     try:
         srv.execute(command)
+        
         user_nick = interaction.user.display_name
         nick_color = '\x1b[34m'  # Голубой
         reset_color = '\x1b[0m'
+        
         if map_name:
         	await interaction.response.send_message(f"```ansi\n{nick_color}{user_nick}{reset_color} сменил карту на: {map_name}```")
         else:
@@ -154,10 +160,11 @@ async def srv_change_map(interaction: discord.Interaction, map_name: str = None)
 @commands.has_permissions(manage_messages=True)  # Проверка прав пользователя
 async def kick(interaction: discord.Interaction, player_nick: str, reason: str):
     if interaction.channel.id != config.SRV_MNGR_CHANNEL_ID:
+        await interaction.response.send_message(f'Эта команда доступна только в <@1284378418082742354>', ephemeral=True)
         return  # Отключаем выполнение команды в других каналах
     
     # Формируем команду для кика игрока
-    command = f"ultrahc_ds_kick_player {player_nick} {reason}"
+    command = f"ultrahc_ds_kick_player \"{player_nick}\" \"{reason}\""
     
     # Отправляем команду на сервер
     try:
@@ -169,5 +176,5 @@ async def kick(interaction: discord.Interaction, player_nick: str, reason: str):
     except Exception as e:
         logging.error(f"Ошибка при кике игрока: {e}")
         await interaction.response.send_message('Ошибка при кике игрока. Проверьте логи.', ephemeral=True)
-O
+
 #-------------------------------------------------------------------
