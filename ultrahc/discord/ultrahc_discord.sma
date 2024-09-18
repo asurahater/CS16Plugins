@@ -43,7 +43,6 @@ new const __saytext_teams[][] = {
 new __cvar_str_list[ECvarsList][32];
 
 new __sql_handle;
-new __sql_responce_info[256];
 
 public plugin_init() {
 	register_plugin(PLUGIN_NAME, PLUGIN_VERSION, PLUGIN_AUTHOR);
@@ -86,13 +85,12 @@ public client_putinserver(client_id) {
 }
 
 //-----------------------------------------
-new __client_id_save;
 public ClientPutInhandler(client_id) {
 	if(!ultrahc_is_pref_file_load()) {
 		set_task(1.0, "ClientPutInhandler", client_id);
 		return;
 	}
-	set_task(3.0, "GetMeTime", client_id);	
+	set_task(2.0, "GetMeTime", client_id);	
 }
 	
 public GetMeTime(client_id) {
@@ -102,18 +100,40 @@ public GetMeTime(client_id) {
 	new sql_request[512];
 	formatex(sql_request, charsmax(sql_request), "SELECT ds_display_name FROM users WHERE steam_id = '%s'", steam_id);
 	
-	__client_id_save = client_id;
-	// ultrahc_make_sql_request(sql_request, "SQLReqHandler");
-	SQL_ThreadQuery(__sql_handle, "SQLHandler", sql_request, __sql_responce_info, charsmax(__sql_responce_info));
+	new data[8];
+	num_to_str(client_id, data, charsmax(data));
+	
+	SQL_ThreadQuery(__sql_handle, "SQLHandler", sql_request, data, charsmax(data));
 }
 
 public SQLHandler(failstate, query, error[], errnum, data[], size, queuetime) {
+	// failstate:
+	// #define TQUERY_CONNECT_FAILED -2
+	// #define TQUERY_QUERY_FAILED -1
+	// #define TQUERY_SUCCESS 0
+	if(failstate == TQUERY_CONNECT_FAILED) {
+		server_print("===============================");
+		server_print("	ultrahc_discord: SQL CONNECTION FAILED", failstate);
+		server_print("	%s", error);
+		server_print("===============================");
+		return;
+	}
+	else if(failstate == TQUERY_QUERY_FAILED) {
+		server_print("===============================");
+		server_print("	ultrahc_discord: SQL QUERY FAILED", failstate);
+		server_print("	%s", error);
+		server_print("===============================");
+		return;
+	}
+
 	if(SQL_NumResults(query) == 0) return;
 	
 	new username[64];
 	SQL_ReadResult(query, 0, username, charsmax(username));
+	
+	new client_id = str_to_num(data);
 
-	ultrahc_add_prefix(__client_id_save, username, 4);
+	ultrahc_add_prefix(client_id, username, 4);
 }
 
 //-----------------------------------------
