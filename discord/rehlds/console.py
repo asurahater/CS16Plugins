@@ -14,7 +14,7 @@ class Console:
     
     is_connected = False
 
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock = None
 
     def __init__(self, *, host, port=27015, password):
         self.host = host
@@ -22,16 +22,20 @@ class Console:
         self.password = password
 
     def connect(self):
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # Создаем новый сокет
         self.sock.settimeout(4)
-        self.sock.connect((self.host, int(self.port)))
-        self.is_connected = True
-        if self.execute('stats') == 'Bad rcon_password.':
-            raise Exception("bad rcon password")
-            self.disconnect()
+        try:
+            self.sock.connect((self.host, int(self.port)))
+            self.is_connected = True
+            if self.execute('stats') == 'Bad rcon_password.':
+                raise Exception("bad rcon password")
+        except Exception as e:
+            self.disconnect()  # Закрываем сокет в случае ошибки
+            raise e  # Пробрасываем исключение дальше
 
     def disconnect(self):
-        self.sock.close()
         self.is_connected = False
+        self.sock.close()
 
     def getChallenge(self):
         try:
@@ -45,8 +49,8 @@ class Console:
             response = BytesIO(self.sock.recv(packetSize))
             return str(response.getvalue()).split(" ")[1]
         except Exception as e:
-            raise Exception("server is offline")
             self.disconnect()
+            raise Exception("server is offline")
 
     def execute(self, cmd):
         try:
@@ -68,5 +72,5 @@ class Console:
 
             return response.getvalue()[5:-3].decode()
         except Exception as e:
-            raise Exception("server is offline")
             self.disconnect()
+            raise Exception("server is offline")
