@@ -57,7 +57,6 @@ public plugin_init() {
 	register_concmd("ultrahc_ds_change_map", "HookChangeMapCmd");
 	register_concmd("ultrahc_ds_kick_player", "HookKickPlayerCmd");
 	
-	// register_concmd("ultrahc_ds_notify_cheater", "HookKickPlayerCmd");
 	register_concmd("ultrahc_ds_get_info", "HookGetinfoCmd");
 	
 	bind_pcvar_string(create_cvar("ultrahc_ds_webhook_token", ""), __cvar_str_list[_webhook_token], 32);
