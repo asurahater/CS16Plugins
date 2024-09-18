@@ -7,11 +7,11 @@ from bot_web_hooks import *
 
 #-- /clear
 #-- Чистит канал от n сообщений
-#-- @params n (degault=100)
+#-- @params n (default=0)
 @bot.tree.command(name="clear", description="Удаляет сообщения в канале.")
 @discord.app_commands.describe(amount="Количество сообщений для удаления")
 @commands.has_permissions(manage_messages=True) 
-async def clear(interaction: discord.Interaction, amount: int = 100):
+async def clear(interaction: discord.Interaction, amount: int = 0):
     channel = interaction.channel
     if channel is not None:
         deleted = await channel.purge(limit=amount)
@@ -25,16 +25,16 @@ async def clear(interaction: discord.Interaction, amount: int = 100):
 @commands.has_permissions(manage_messages=True)  # Проверка прав пользователя
 async def connect(interaction: discord.Interaction):
     if srv.is_connected:
-		    await interaction.response.send_message('Сервер уже подключен', ephemeral=True)
-		    return
-		    
+		    srv.disconnect()
+  
     # Вызываем функцию подключения к серверу
     try:
         await connect_to_cs()
+        logging.info(f"Подключился к CS Server")
         await interaction.response.send_message("Успешно подключено к серверу!", ephemeral=True)
     except Exception as e:
-        logging.error(f"Ошибка при подключении к серверу: {e}")
-        await interaction.response.send_message('Ошибка при подключении к серверу. Проверьте логи.', ephemeral=True)
+        logging.error(f"Ошибка при подключении к CS Server: {e}")
+        await interaction.response.send_message('Ошибка при подключении к CS Server. Проверьте логи.', ephemeral=True)
 
 #-------------------------------------------------------------------
 #-- Команды для регистрации игроков
@@ -46,7 +46,7 @@ async def connect(interaction: discord.Interaction):
 @bot.tree.command(name="reg", description="Регистрация пользователя с указанием steam_id")
 async def reg(interaction: discord.Interaction, steam_id: str):
     if interaction.channel.id != config.REG_CHANNEL_ID:
-    		await interaction.response.send_message(f'Эта команда доступна только в <@1284218577678766183>', ephemeral=True)
+    		await interaction.response.send_message(f'Эта команда доступна только в <@>', ephemeral=True)
     		return  # Отключаем выполнение команды в других каналах
     
     user_id = str(interaction.user.id)
@@ -67,7 +67,7 @@ async def reg(interaction: discord.Interaction, steam_id: str):
 @bot.tree.command(name="remove", description="Удаляет данные пользователя по Discord ID.")
 async def remove(interaction: discord.Interaction):
     if interaction.channel.id != config.REG_CHANNEL_ID:
-    		await interaction.response.send_message(f'Эта команда доступна только в <@1284218577678766183>', ephemeral=True)
+    		await interaction.response.send_message(f'Эта команда доступна только в <@>', ephemeral=True)
     		return  # Отключаем выполнение команды в других каналах
     
     user_id = str(interaction.user.id)
@@ -104,7 +104,7 @@ async def remove(interaction: discord.Interaction):
 @commands.has_permissions(manage_messages=True)  # Проверка прав пользователя
 async def status(interaction: discord.Interaction):
     if interaction.channel.id != config.INFO_CHANNEL_ID:
-        await interaction.response.send_message(f'Эта команда доступна только в <@1284468786493132862>', ephemeral=True)
+        await interaction.response.send_message(f'Эта команда доступна только в <@>', ephemeral=True)
         return  # Отключаем выполнение команды в других каналах
     
     # Отправляем команду на сервер
@@ -112,7 +112,7 @@ async def status(interaction: discord.Interaction):
         srv.execute("ultrahc_ds_get_info")  # Выполняем команду на сервере
         await interaction.response.send_message('Команда выполнена.', ephemeral=True, delete_after=0)
     except Exception as e:
-        logging.error(f"Ошибка при получении статуса сервера: {e}")
+        logging.error(f"Ошибка при получении статуса CS Server: {e}")
         await interaction.response.send_message('Ошибка при получении статуса сервера. Проверьте логи.', ephemeral=True)
 
 #-------------------------------------------------------------------
@@ -122,20 +122,22 @@ async def status(interaction: discord.Interaction):
 #-- /change_map
 #-- Меняет карту
 #-- @params: map_name
+
+# Создание списка choices из массива строк
+map_choices = [discord.app_commands.Choice(name=map_item, value=map_item) for map_item in config.MAP_LIST]
+
 @bot.tree.command(name="change_map", description="Меняет карту на удаленном сервере.")
 @discord.app_commands.describe(map_name="Название карты для смены")
+@discord.app_commands.choices(map_name=map_choices)
 @commands.has_permissions(manage_messages=True)  # Проверка прав пользователя
-async def srv_change_map(interaction: discord.Interaction, map_name: str = None):
+async def srv_change_map(interaction: discord.Interaction, map_name: discord.app_commands.Choice[str]):
     if interaction.channel.id != config.SRV_MNGR_CHANNEL_ID:
-        await interaction.response.send_message(f'Эта команда доступна только в <@1284378418082742354>', ephemeral=True)
+        await interaction.response.send_message(f'Эта команда доступна только в <@>', ephemeral=True)
         return
     
     # Формируем команду для смены карты
-    if map_name:
-    		command = f"ultrahc_ds_change_map {map_name}"
-    else:
-    		command = "ultrahc_ds_change_map"
-		
+    command = f"ultrahc_ds_change_map {map_name.value}"
+    
     # Отправляем команду на сервер
     try:
         srv.execute(command)
@@ -144,23 +146,24 @@ async def srv_change_map(interaction: discord.Interaction, map_name: str = None)
         nick_color = '\x1b[34m'  # Голубой
         reset_color = '\x1b[0m'
         
-        if map_name:
-        	await interaction.response.send_message(f"```ansi\n{nick_color}{user_nick}{reset_color} сменил карту на: {map_name}```")
-        else:
-        	await interaction.response.send_message(f"```ansi\n{nick_color}{user_nick}{reset_color} перезагрузил карту```")
+        await interaction.response.send_message(f"```ansi\n{nick_color}{user_nick}{reset_color} сменил карту на: {map_name.name}```")
     except Exception as e:
         logging.error(f"Ошибка при смене карты: {e}")
         await interaction.response.send_message('Ошибка при смене карты. Проверьте логи.', ephemeral=True)
 
+
 #-- /kick
 #-- Кикает игрока с сервера
 #-- @params player_nick, reason
+
+
+
 @bot.tree.command(name="kick", description="Кикает игрока с сервера.")
 @discord.app_commands.describe(player_nick="Ник игрока", reason="Причина кика")
 @commands.has_permissions(manage_messages=True)  # Проверка прав пользователя
 async def kick(interaction: discord.Interaction, player_nick: str, reason: str):
     if interaction.channel.id != config.SRV_MNGR_CHANNEL_ID:
-        await interaction.response.send_message(f'Эта команда доступна только в <@1284378418082742354>', ephemeral=True)
+        await interaction.response.send_message(f'Эта команда доступна только в <@>', ephemeral=True)
         return  # Отключаем выполнение команды в других каналах
     
     # Формируем команду для кика игрока

@@ -1,5 +1,5 @@
 import mysql.connector
-from mysql.connector import Error
+from mysql.connector import Error, errorcode
 
 import bot
 from bot import *
@@ -11,13 +11,28 @@ MAX_LINES = 50
 MAX_CHAR_LIMIT = 2000  # Лимит символов в Discord для одного сообщения
 user_message_received = False
 
+@bot.event
+async def on_message(message):
+    global user_message_received
+
+    if message.author == bot.user:
+        return
+
+    if message.channel.id == config.CS_CHAT_CHNL_ID:
+        user_message_received = True
+        send_msg = message.author.display_name + " " + "\"" + message.content + "\""
+        srv.execute(f"ultrahc_ds_send_msg {send_msg}")
+				# await message.delete()
+
+    await bot.process_commands(message)
+
 # Функция для проверки API-ключа
 def check_api_key(request):
     api_key = request.headers.get('Authorization')  # Извлекаем ключ из заголовка
     if api_key == config.API_KEY:
         return True
     else:
-        logging.warning("Неверный API-ключ")
+        logging.warning(f"Неверный API-ключ")
         return False
 
 def get_discord_id_by_steam_id(steam_id):
@@ -41,15 +56,22 @@ def connect_to_mysql():
             host=config.DB_HOST,
             user=config.DB_USER,
             password=config.DB_PASSWORD,
-						database=config.DB_NAME
+            database=config.DB_NAME
         )
         return conn
     except mysql.connector.Error as err:
+        # Выводим код ошибки и сообщение
+        logging.error(f"Ошибка подключения: {err.errno} - {err.msg}")
+        
         if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:
-            logging.error("Неверные данные для подключения к MySQL")
+            logging.error("Неверные данные для подключения к Базе данных")
+        elif err.errno == errorcode.ER_BAD_DB_ERROR:
+            logging.error("База данных не найдена")
         else:
-            logging.error(err)
+            logging.error("Ошибка подключения")
+        
         return None
+
 
 # Функция для создания базы данных и таблиц
 def setup_database():
@@ -95,7 +117,7 @@ def setup_database():
         cursor.execute(create_users_table)
         logging.info("Таблицы 'chat' и 'users' проверены или созданы.")
     except mysql.connector.Error as err:
-        logging.error(f"Ошибка при работе с базой данных: {err}")
+        logging.error(f"Ошибка при создании базы данных: {err}")
     finally:
         cursor.close()
         conn.close()
@@ -248,9 +270,9 @@ async def handle_message(data):
                 logging.error(f"Ошибка при обновлении сообщения в Discord: {e}")
         else:
             try:
-                channel = bot.get_channel(config.CHANNEL_ID)
+                channel = bot.get_channel(config.CS_CHAT_CHNL_ID)
                 if channel is None:
-                    logging.error("Канал не найден. Проверьте правильность CHANNEL_ID в config.py.")
+                    logging.error("Канал не найден. Проверьте правильность CS_CHAT_CHNL_ID в config.py.")
                 else:
                     # Отправляем новое сообщение
                     current_message = await channel.send(f"```ansi\n{formatted_message}```")
@@ -277,6 +299,7 @@ async def handle_info(data):
     
     map_name = data.get('map')
     current_players = data.get('current_players', [])
+    
     max_players = data.get('max_players')
 
     # Форматируем сообщение
