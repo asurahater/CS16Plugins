@@ -3,8 +3,10 @@
 #include <easy_http>
 #include <sqlx>
 
+#tryinclude <map_manager>
+
 #define PLUGIN_NAME 		"ULTRAHC Discord hooks"
-#define PLUGIN_VERSION 	"0.1"
+#define PLUGIN_VERSION 	"0.2"
 #define PLUGIN_AUTHOR 	"Asura"
 
 //-----------------------------------------
@@ -17,6 +19,8 @@
 //-----------------------------------------
 
 #define TEXT_LENGHT 128
+
+#define CVARS_LENGTH 128
 
 enum ECvarsList {
 	_webhook_token,
@@ -40,9 +44,11 @@ new const __saytext_teams[][] = {
 	"(SPEC)" // All chat, but sender in spec team
 }
 
-new __cvar_str_list[ECvarsList][32];
+new __cvar_str_list[ECvarsList][CVARS_LENGTH];
 
 new __sql_handle;
+
+// new big_string[5000];
 
 public plugin_init() {
 	register_plugin(PLUGIN_NAME, PLUGIN_VERSION, PLUGIN_AUTHOR);
@@ -58,13 +64,17 @@ public plugin_init() {
 	
 	register_concmd("ultrahc_ds_get_info", "HookGetinfoCmd");
 	
-	bind_pcvar_string(create_cvar("ultrahc_ds_webhook_token", ""), __cvar_str_list[_webhook_token], 32);
-	bind_pcvar_string(create_cvar("ultrahc_ds_webhook_url", ""), __cvar_str_list[_webhook_url], 32);
+	#if defined _map_manager_core_included
+		register_concmd("ultrahc_ds_get_map_list", "HookGetMapList");
+	#endif
 	
-	bind_pcvar_string(create_cvar("ultrahc_ds_sql_host", ""), __cvar_str_list[_sql_host], 32);
-	bind_pcvar_string(create_cvar("ultrahc_ds_sql_user", ""), __cvar_str_list[_sql_user], 32);
-	bind_pcvar_string(create_cvar("ultrahc_ds_sql_pass", ""), __cvar_str_list[_sql_pass], 32);
-	bind_pcvar_string(create_cvar("ultrahc_ds_sql_db", ""), __cvar_str_list[_sql_db], 32);
+	bind_pcvar_string(create_cvar("ultrahc_ds_webhook_token", ""), __cvar_str_list[_webhook_token], CVARS_LENGTH);
+	bind_pcvar_string(create_cvar("ultrahc_ds_webhook_url", ""), __cvar_str_list[_webhook_url], CVARS_LENGTH);
+	
+	bind_pcvar_string(create_cvar("ultrahc_ds_sql_host", ""), __cvar_str_list[_sql_host], CVARS_LENGTH);
+	bind_pcvar_string(create_cvar("ultrahc_ds_sql_user", ""), __cvar_str_list[_sql_user], CVARS_LENGTH);
+	bind_pcvar_string(create_cvar("ultrahc_ds_sql_pass", ""), __cvar_str_list[_sql_pass], CVARS_LENGTH);
+	bind_pcvar_string(create_cvar("ultrahc_ds_sql_db", ""), __cvar_str_list[_sql_db], CVARS_LENGTH);
 	
 	AutoExecConfig(true, PLUGIN_CFG_NAME);
 }
@@ -364,6 +374,59 @@ public HookMsgFromDs() {
 
 	client_print_color(0, print_team_blue, "%s ^3%s^1 : ^4%s", DISCORD_PREFIX, author, msg);
 }
+
+//-----------------------------------------
+
+#if defined _map_manager_core_included
+
+	public HookGetMapList() {
+		new file_maps[] = "maps.ini";
+		
+		new Array:map_list_struct = ArrayCreate(MapStruct, 1);
+		mapm_load_maplist_to_array(map_list_struct, file_maps);
+		
+		// send to discord webhook
+		new EzHttpOptions:options_id = ezhttp_create_options()
+		
+		ezhttp_option_set_header(options_id, "Authorization", __cvar_str_list[_webhook_token])
+		ezhttp_option_set_header(options_id, "Content-Type", "application/json")
+		
+		static big_string[4096];
+		new json_len = 0;
+		
+		json_len += formatex(big_string[json_len], charsmax(big_string) - json_len, "{");
+		
+		json_len += formatex(big_string[json_len], charsmax(big_string) - json_len, "^"type^":^"map_list^",");
+		json_len += formatex(big_string[json_len], charsmax(big_string) - json_len, "^"maps^":[");
+		
+		for(new i=0; i < ArraySize(map_list_struct); ++i) {
+		
+			new map_info[MapStruct];
+			ArrayGetArray(map_list_struct, i, map_info);
+			
+			new msg_format[64];
+			formatex(msg_format, charsmax(msg_format), "%s", map_info[Map]);
+		
+			json_len += formatex(big_string[json_len], charsmax(big_string) - json_len, "^"%s^"", msg_format);
+			
+			if(i < ArraySize(map_list_struct)-1) {
+				json_len += formatex(big_string[json_len], charsmax(big_string) - json_len, ",", msg_format);
+			}
+			
+		}
+		
+		json_len += formatex(big_string[json_len], charsmax(big_string) - json_len, "]");
+		
+		json_len += formatex(big_string[json_len], charsmax(big_string) - json_len, "}");
+		
+		ezhttp_option_set_body(options_id, big_string)
+		
+		ezhttp_post(__cvar_str_list[_webhook_url], "HTTPComplete", options_id)
+		
+		server_print(big_string);
+	}
+
+#endif
 
 //-----------------------------------------
 
