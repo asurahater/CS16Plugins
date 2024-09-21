@@ -6,7 +6,7 @@
 #tryinclude <map_manager>
 
 #define PLUGIN_NAME 		"ULTRAHC Discord hooks"
-#define PLUGIN_VERSION 	"0.2"
+#define PLUGIN_VERSION 	"0.3"
 #define PLUGIN_AUTHOR 	"Asura"
 
 //-----------------------------------------
@@ -46,7 +46,7 @@ new const __saytext_teams[][] = {
 
 new __cvar_str_list[ECvarsList][CVARS_LENGTH];
 
-new __sql_handle;
+new Handle:__sql_handle;
 
 // new big_string[5000];
 
@@ -65,7 +65,8 @@ public plugin_init() {
 	register_concmd("ultrahc_ds_get_info", "HookGetinfoCmd");
 	
 	#if defined _map_manager_core_included
-		register_concmd("ultrahc_ds_get_map_list", "HookGetMapList");
+		register_concmd("ultrahc_ds_reload_map_list", "HookReloadMapList");
+		mapm_block_load_maplist();
 	#endif
 	
 	bind_pcvar_string(create_cvar("ultrahc_ds_webhook_token", ""), __cvar_str_list[_webhook_token], CVARS_LENGTH);
@@ -116,7 +117,7 @@ public GetMeTime(client_id) {
 	SQL_ThreadQuery(__sql_handle, "SQLHandler", sql_request, data, charsmax(data));
 }
 
-public SQLHandler(failstate, query, error[], errnum, data[], size, queuetime) {
+public SQLHandler(failstate, Handle:query, error[], errnum, data[], size, queuetime) {
 	// failstate:
 	// #define TQUERY_CONNECT_FAILED -2
 	// #define TQUERY_QUERY_FAILED -1
@@ -315,32 +316,43 @@ public HookGetinfoCmd() {
 	new map_name[32];
 	get_mapname(map_name, charsmax(map_name));
   
-	json_len += formatex(json[json_len], charsmax(json) - json_len, "^"type^": ^"info^",");
-	json_len += formatex(json[json_len], charsmax(json) - json_len, "^"map^": ^"%s^",", map_name);
+	json_len += formatex(json[json_len], charsmax(json) - json_len, "^"type^":^"info^",");
+	json_len += formatex(json[json_len], charsmax(json) - json_len, "^"map^":^"%s^",", map_name);
 	
-	json_len += formatex(json[json_len], charsmax(json) - json_len, "^"current_players^": [");
+	json_len += formatex(json[json_len], charsmax(json) - json_len, "^"current_players^":[");
 	
-	for(new i=1; i <= MaxClients; i++) {
-		if(!is_user_connected(i)) continue;
+	new players[MAX_PLAYERS], num;
+	get_players(players, num);
+	
+	for(new i=0; i < num; i++) {
+		new id = players[i];
+	
+		if(!is_user_connected(id)) continue;
 		
 		new user_name[MAX_NAME_LENGTH];
-		get_user_name(i, user_name, charsmax(user_name));
+		get_user_name(id, user_name, charsmax(user_name));
+		
+		new user_auth[64];
+		get_user_authid(id, user_auth, charsmax(user_auth));
 		
 		replace_string(user_name, charsmax(user_name), "^"", "'");
 		
-		new user_frags = get_user_frags(i);
-		new user_deaths = get_user_deaths(i);
-		new user_team = get_user_team(i);
+		new user_frags = get_user_frags(id);
+		new user_deaths = get_user_deaths(id);
+		new user_team = get_user_team(id);
 		
-		json_len += formatex(json[json_len], charsmax(json) - json_len, "{^"name^": ^"%s^",", user_name);
-		json_len += formatex(json[json_len], charsmax(json) - json_len, "^"stats^": [%i, %i, %i]},", user_frags, user_deaths, user_team);
+		json_len += formatex(json[json_len], charsmax(json) - json_len, "{^"name^":^"%s^",", user_name);
+		json_len += formatex(json[json_len], charsmax(json) - json_len, "^"steam_id^":^"%s^",", user_auth);
+		json_len += formatex(json[json_len], charsmax(json) - json_len, "^"stats^":[%i, %i, %i]}", user_frags, user_deaths, user_team);
 		
+		if(i < num-1) {
+			json_len += formatex(json[json_len], charsmax(json) - json_len, ",");
+		}
 	}
 	
-	json_len += formatex(json[json_len], charsmax(json) - json_len, "^"null^"],");
+	json_len += formatex(json[json_len], charsmax(json) - json_len, "],");
 	
-	
-	json_len += formatex(json[json_len], charsmax(json) - json_len, "^"max_players^": %i", MaxClients);
+	json_len += formatex(json[json_len], charsmax(json) - json_len, "^"max_players^":%i", MaxClients);
   
 	json_len += formatex(json[json_len], charsmax(json) - json_len, "}");
 
@@ -378,52 +390,48 @@ public HookMsgFromDs() {
 //-----------------------------------------
 
 #if defined _map_manager_core_included
+	new file_name[] = "maps_ultrahc.ini";
 
-	public HookGetMapList() {
-		new file_maps[] = "maps.ini";
+	public plugin_cfg() {
+		mapm_load_maplist(file_name)
+	}
+
+	public HookReloadMapList() {
+		new sql_request[512] = "SELECT map_name, min_players, max_players, priority FROM maps WHERE activated=1";
 		
-		new Array:map_list_struct = ArrayCreate(MapStruct, 1);
-		mapm_load_maplist_to_array(map_list_struct, file_maps);
+		SQL_ThreadQuery(__sql_handle, "SQLHandlerForMapList", sql_request);
+	}
+
+	public SQLHandlerForMapList(failstate, Handle:query, error[], errnum, data[], size, queuetime) {
+		new file_path[256]; 
+		get_localinfo("amxx_configsdir", file_path, charsmax(file_path));
+		formatex(file_path, charsmax(file_path), "%s/%s", file_path, file_name);
 		
-		// send to discord webhook
-		new EzHttpOptions:options_id = ezhttp_create_options()
+		new file = fopen(file_path, "w");
 		
-		ezhttp_option_set_header(options_id, "Authorization", __cvar_str_list[_webhook_token])
-		ezhttp_option_set_header(options_id, "Content-Type", "application/json")
-		
-		static big_string[4096];
-		new json_len = 0;
-		
-		json_len += formatex(big_string[json_len], charsmax(big_string) - json_len, "{");
-		
-		json_len += formatex(big_string[json_len], charsmax(big_string) - json_len, "^"type^":^"map_list^",");
-		json_len += formatex(big_string[json_len], charsmax(big_string) - json_len, "^"maps^":[");
-		
-		for(new i=0; i < ArraySize(map_list_struct); ++i) {
-		
-			new map_info[MapStruct];
-			ArrayGetArray(map_list_struct, i, map_info);
-			
-			new msg_format[64];
-			formatex(msg_format, charsmax(msg_format), "%s", map_info[Map]);
-		
-			json_len += formatex(big_string[json_len], charsmax(big_string) - json_len, "^"%s^"", msg_format);
-			
-			if(i < ArraySize(map_list_struct)-1) {
-				json_len += formatex(big_string[json_len], charsmax(big_string) - json_len, ",", msg_format);
-			}
-			
+		if(!file) {
+			server_print("ULTRAHC_DISCORD: Can't create/open map list");
+			return;
 		}
 		
-		json_len += formatex(big_string[json_len], charsmax(big_string) - json_len, "]");
+		while(SQL_MoreResults(query)) {
+			new map_name[MAPNAME_LENGTH];
+			SQL_ReadResult(query, 0, map_name, charsmax(map_name));
+			
+			new min_players = SQL_ReadResult(query, 1);
+			new max_players = SQL_ReadResult(query, 2);
+			new priority = SQL_ReadResult(query, 3);
+			
+			new str_to_put[128];
+			
+			formatex(str_to_put, charsmax(str_to_put), "%s %i %i %i^n", map_name, min_players, max_players, priority);
+			
+			fputs(file, str_to_put);
 		
-		json_len += formatex(big_string[json_len], charsmax(big_string) - json_len, "}");
+			SQL_NextRow(query);
+		}
 		
-		ezhttp_option_set_body(options_id, big_string)
-		
-		ezhttp_post(__cvar_str_list[_webhook_url], "HTTPComplete", options_id)
-		
-		server_print(big_string);
+		fclose(file);
 	}
 
 #endif
