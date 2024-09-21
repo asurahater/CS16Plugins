@@ -23,6 +23,9 @@ async def on_ready():
     except Exception as e:
         logging.error(f"Ошибка при запуске задач: {e}")
     
+    all_maps, active_maps = load_map_data_from_redis()
+    update_map_lists(all_maps, active_maps)
+    
     status_task.start()
 
 # Регистрация команд

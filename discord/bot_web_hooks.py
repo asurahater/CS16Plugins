@@ -1,8 +1,8 @@
 import mysql.connector
 from mysql.connector import Error, errorcode
 
-import bot
-from bot import *
+import redis_manager
+from redis_manager import *
 
 current_message = None
 current_status = None
@@ -10,8 +10,55 @@ line_count = 0
 max_lines = 50
 max_char_limit = 2000  # Лимит символов в Discord для одного сообщения
 user_message_received = False
-maps = []
 current_players = []
+
+# Загружается из БД
+all_maps = []
+active_maps = []
+
+
+#-------------------------------------------------------------------
+#-- Утильс
+#-------------------------------------------------------------------
+
+def get_steam_id(player_name):
+    for player in current_players:
+        if player["name"] == player_name:
+            return player["steam_id"]
+    return None  # Если player_name не найден
+
+def update_map_lists(all_maps_, active_maps_):
+    global all_maps, active_maps
+    all_maps = all_maps_
+    active_maps = active_maps_
+    
+def add_map_to_all(map_name):
+    global all_maps
+    if map_name not in all_maps:
+        all_maps.append(map_name)
+        return 1
+    return 0
+
+def add_map_to_active(map_name):
+    global active_maps
+    if map_name not in active_maps:
+        active_maps.append(map_name)
+        return 1
+    return 0
+
+def del_map_from_all(map_name):
+    global all_maps
+    if map_name in all_maps:
+        all_maps.remove(map_name)
+        return 1
+    return 0
+
+def del_map_from_active(map_name):
+    global active_maps
+    if map_name in active_maps:
+        active_maps.remove(map_name)
+        return 1
+    return 0
 
 def set_user_message_received(val):
 	global user_message_received
@@ -25,6 +72,10 @@ def check_api_key(request):
     else:
         logging.warning(f"Неверный API-ключ")
         return False
+
+#-------------------------------------------------------------------
+#-- Работа с БД
+#-------------------------------------------------------------------
 
 def get_discord_id_by_steam_id(steam_id):
     connection = connect_to_mysql()
@@ -134,12 +185,143 @@ def save_user(user_id, username, ds_username, steam_id):
     	return
     
     cursor = connection.cursor()
+    
     query = "INSERT INTO users (discord_id, ds_name, ds_display_name, steam_id) VALUES (%s, %s, %s, %s)"
+    
     cursor.execute(query, (user_id, username, ds_username, steam_id))
     connection.commit()
     cursor.close()
     connection.close()
     
+# Сохранение Карты в базу данных
+def save_map(map_name, activated, min_players, max_players, priority):
+
+    # redis
+    add_map_to_redis(map_name, activated)
+
+    connection = connect_to_mysql()
+    if not connection:
+    	return
+    	
+    cursor = connection.cursor()
+    
+    query = """
+        INSERT INTO maps (map_name, activated, min_players, max_players, priority) 
+        VALUES (%s, %s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE 
+            activated = VALUES(activated),
+            min_players = VALUES(min_players),
+            max_players = VALUES(max_players),
+            priority = VALUES(priority)
+    """
+    
+    cursor.execute(query, (map_name, activated, min_players, max_players, priority))
+    connection.commit()
+    cursor.close()
+    connection.close()
+    
+def delete_map(map_name):
+    # redis
+    delete_map_from_redis(map_name)
+
+    connection = connect_to_mysql()
+    if not connection:
+    	return
+    	
+    cursor = connection.cursor()
+    
+    query = "DELETE FROM maps WHERE map_name = %s"
+    
+    cursor.execute(query, (map_name,))
+    connection.commit()
+    cursor.close()
+    connection.close()
+
+# Обновляет карту в базе данных
+def update_map(map_name, activated, min_players, max_players, priority):
+    global all_maps, active_maps
+    if map_name not in all_maps:
+        return 0
+    
+    # Обновление в Redis перед попыткой соединения с БД
+    update_map_value_in_redis(map_name, activated)
+
+    connection = connect_to_mysql()
+    if not connection:
+        return 1  # Возвращаем 1, так как обновление в Redis прошло успешно
+
+    cursor = connection.cursor()
+    
+    # Формируем запрос и параметры
+    updates = []
+    params = []
+
+    if activated is not None:
+        updates.append("activated = %s")
+        params.append(activated)
+        
+    if min_players is not None:
+        updates.append("min_players = %s")
+        params.append(min_players)
+        
+    if max_players is not None:
+        updates.append("max_players = %s")
+        params.append(max_players)
+        
+    if priority is not None:
+        updates.append("priority = %s")
+        params.append(priority)
+
+    if not updates:
+        cursor.close()
+        connection.close()
+        return 0
+
+    query = f"UPDATE maps SET {', '.join(updates)} WHERE map_name = %s"
+    params.append(map_name)
+
+    cursor.execute(query, params)
+    connection.commit()
+    cursor.close()
+    connection.close()
+    
+    return 1
+      
+def sync_redis_with_db():
+    global all_maps, active_maps
+    r = redis.Redis(host=config.REDIS_HOST, port=config.REDIS_PORT, db=0)
+
+    connection = connect_to_mysql()
+    if not connection:
+        return 0
+        
+    cursor = connection.cursor()
+    
+    # Получаем данные из базы данных
+    cursor.execute("SELECT map_name, activated FROM maps")
+    results = cursor.fetchall()  # Получаем все результаты
+    
+    # Очищаем Redis перед синхронизацией
+    r.flushdb()
+
+    for name, activated in results:
+        # Сохраняем данные в Redis
+        r.set(name, activated)
+        
+    cursor.close()
+    connection.close()
+    
+    all_maps, active_maps = load_map_data_from_redis()
+    
+    r.bgsave()
+    r.close()
+    
+    return 1
+    
+#-------------------------------------------------------------------
+#-- Форматирование сообщения с информацией о сервере
+#-------------------------------------------------------------------
+
 # Функция для создания сообщения с ANSI цветами, включая timestamp и префикс канала
 def format_message(nick, message, team, channel_prefix):
     # Получаем текущее время в формате HH:MM:SS
@@ -166,16 +348,13 @@ def format_message(nick, message, team, channel_prefix):
 
     # Форматируем сообщение с timestamp, префиксом канала, ником и его цветом
     return f"{timestamp_color}{timestamp}{reset_color} {channel_prefix} {nick_color}{nick}{reset_color}: {message}\n"
-    
-#-------------------------------------------------------------------
-#-- Форматирование сообщения с информацией о сервере
-#-------------------------------------------------------------------
+
 def format_info_message(map_name, current_players, max_players):
-    player_count = len(current_players) - 1  # Убираем последний элемент "null"
+    player_count = len(current_players)  # Убираем последний элемент "null"
     team_players = {1: [], 2: [], 3: []}  # Словарь для хранения игроков по командам
 
     # Группируем игроков по командам
-    for player in current_players[:-1]:  # Убираем последний элемент "null"
+    for player in current_players:  # Убираем последний элемент "null"
         player_name = player['name']
         stats = player['stats']
         team = stats[2]
@@ -205,8 +384,6 @@ def format_info_message(map_name, current_players, max_players):
 		# formatted_info.append("\n".join([f"\033[37m{player}\033[0m" for player in team_players[3]]) if team_players[3] else "Нет игроков")
 
     return "\n".join(formatted_info)
-
-
 
 #-------------------------------------------------------------------
 #-- Обработка вебхука
@@ -325,11 +502,6 @@ async def handle_info(data):
 
     # Если current_status не существует или сообщение не найдено, создаем новое
     current_status = await channel.send(f"```ansi\n{formatted_info}```")
-    
-async def handle_map_list(data):
-    global maps
-    
-    maps = data.get('maps', [])
 
 async def handle_webhook(request):
     # Проверяем API-ключ перед обработкой запроса
@@ -345,8 +517,6 @@ async def handle_webhook(request):
         await handle_notify(data)
     elif message_type == 'info':
         await handle_info(data)
-    elif message_type == 'map_list':
-        await handle_map_list(data)  # Обработка нового типа сообщения
 
     return web.Response(text='OK')
     
@@ -358,11 +528,31 @@ app.router.add_post('/webhook', handle_webhook)
 #-- Autocompletions
 #-------------------------------------------------------------------
 
-async def map_autocomplete(interaction: discord.Interaction, current: str) -> list[discord.app_commands.Choice[str]]:
-    filter_maps = [map_name for map_name in maps if current.lower() in map_name.lower()][:25]
+async def all_map_autocomplete(interaction: discord.Interaction, current: str) -> list[discord.app_commands.Choice[str]]:
+    filter_maps = [map_name for map_name in all_maps if current.lower() in map_name.lower()][:25]
     return [discord.app_commands.Choice(name=map, value=map) for map in filter_maps]
 
-async def kick_autocomplete(interaction: discord.Interaction, current: str) -> list[discord.app_commands.Choice[str]]:
+async def active_map_autocomplete(interaction: discord.Interaction, current: str) -> list[discord.app_commands.Choice[str]]:
+    filter_maps = [map_name for map_name in active_maps if current.lower() in map_name.lower()][:25]
+    return [discord.app_commands.Choice(name=map, value=map) for map in filter_maps]
+
+async def players_online_autocomplete(interaction: discord.Interaction, current: str) -> list[discord.app_commands.Choice[str]]:
     global current_players
-    filter_players = [player['name'] for player in current_players[:-1] if current.lower() in player['name'].lower()][:25]
+    filter_players = [player['name'] for player in current_players if current.lower() in player['name'].lower()][:25]
     return [discord.app_commands.Choice(name=player, value=player) for player in filter_players]
+
+async def players_banned_autocomplete(interaction: discord.Interaction, current: str) -> list[discord.app_commands.Choice[str]]:
+    ban_list = get_last_bans_from_redis() # последние 25
+
+    filter_players = [ban for ban in ban_list if current.lower() in ban['player_name'].lower()][:25]
+    return [discord.app_commands.Choice(name=f"{player['player_name']} ({player['steam_id']})", value=player['steam_id']) for player in filter_players]
+
+async def ban_choice_autocomplete(interaction: discord.Interaction, current: str) -> list[discord.app_commands.Choice[str]]:
+    return [
+						discord.app_commands.Choice(name="5 минут", value=5),
+						discord.app_commands.Choice(name="30 минут", value=30),
+						discord.app_commands.Choice(name="60 минут", value=60),
+						discord.app_commands.Choice(name="1 день", value=1440),
+						discord.app_commands.Choice(name="1 неделя", value=10080),
+						discord.app_commands.Choice(name="Навсегда", value=0)
+					]
