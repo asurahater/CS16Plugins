@@ -192,8 +192,35 @@ async def cmd_ban(interaction: discord.Interaction, player_nick: str, minutes: i
         user_steam_id = get_steam_id(player_nick)
         if user_steam_id:
             add_ban_to_redis(player_nick, user_steam_id, minutes, reason)
-        else:
+        else: # Если player_nick это steam_id
             add_ban_to_redis(player_nick, player_nick, minutes, reason)
+        
+        await interaction.response.send_message(f"```ansi\n{nick_color}{user_nick}{reset_color} забанил игрока: {nick_color}{player_nick}{reset_color} по причине: {reason}```")
+    except Exception as e:
+        logging.error(f"Ошибка при бане игрока: {e}")
+        await interaction.response.send_message('Ошибка при бане игрока. Проверьте логи.', ephemeral=True)
+
+#-- /ban_offline
+#-- Банит игрока, который был на сервере ранее
+@bot.tree.command(name="ban_offline", description="Банит игрока, который был на сервере ранее")
+@discord.app_commands.describe(player_nick="steam_id игрока", minutes="Минут бана(0 - перманент)", reason="Причина бана")
+@discord.app_commands.autocomplete(player_nick=players_offline_autocomplete)
+@discord.app_commands.autocomplete(minutes=ban_choice_autocomplete)
+@commands.has_permissions(manage_messages=True)  # Проверка прав пользователя
+async def cmd_offline_ban(interaction: discord.Interaction, player_nick: str, minutes: int, reason: str=None):
+    if not reason:
+        reason = "Без причины"
+		
+    command = f"amx_addban \"{player_nick}\" \"{minutes}\" \"{reason}\""
+    
+    # Отправляем команду на сервер
+    try:
+        srv.execute(command)
+        user_nick = interaction.user.display_name
+        nick_color = '\x1b[34m'  # Голубой
+        reset_color = '\x1b[0m'
+        
+        add_ban_to_redis(player_nick, player_nick, minutes, reason)
         
         await interaction.response.send_message(f"```ansi\n{nick_color}{user_nick}{reset_color} забанил игрока: {nick_color}{player_nick}{reset_color} по причине: {reason}```")
     except Exception as e:
@@ -206,7 +233,7 @@ async def cmd_ban(interaction: discord.Interaction, player_nick: str, minutes: i
 @discord.app_commands.describe(player_id="steam_id игрока")
 @discord.app_commands.autocomplete(player_id=players_banned_autocomplete)
 @commands.has_permissions(manage_messages=True)  # Проверка прав пользователя
-async def cmd_ban(interaction: discord.Interaction, player_id: str):
+async def cmd_unban(interaction: discord.Interaction, player_id: str):
 		# Формируем команду для кика игрока
 		
     command = f"amx_unban \"{player_id}\""

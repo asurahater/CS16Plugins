@@ -474,6 +474,9 @@ async def handle_info(data):
     current_players = data.get('current_players', [])
     max_players = data.get('max_players')
 
+    for player in current_players:
+        add_player_to_redis(player['name'], player['steam_id'])
+
     # Форматируем сообщение
     formatted_info = format_info_message(map_name, current_players, max_players)
 
@@ -540,6 +543,16 @@ async def players_online_autocomplete(interaction: discord.Interaction, current:
     global current_players
     filter_players = [player['name'] for player in current_players if current.lower() in player['name'].lower()][:25]
     return [discord.app_commands.Choice(name=player, value=player) for player in filter_players]
+
+async def players_offline_autocomplete(interaction: discord.Interaction, current: str) -> list[discord.app_commands.Choice[str]]:
+    global current_players
+    filter_players = get_non_current_players(current_players);
+    choices = [
+        discord.app_commands.Choice(name=f"{player['player_name']} ({player['steam_id']})", value=player["steam_id"])
+        for player in filter_players
+    ][:25]
+    
+    return choices
 
 async def players_banned_autocomplete(interaction: discord.Interaction, current: str) -> list[discord.app_commands.Choice[str]]:
     ban_list = get_last_bans_from_redis() # последние 25
