@@ -4,7 +4,7 @@
 #include <sqlx>
 
 #define PLUGIN_NAME 		"ULTRAHC Chat manager"
-#define PLUGIN_VERSION 	"0.5"
+#define PLUGIN_VERSION 	"0.6"
 #define PLUGIN_AUTHOR 	"Asura"
 
 // #define SHOW_PREFIXES_ON_LOAD // comment it to off prefix list to server console (better to comment for perfomance)
@@ -395,6 +395,12 @@ public SQLChatInsert(owner_id, owner_name[], owner_name_size, owner_team, channe
 	new time_now[64], date_now[64];
 	new steam_id[64];
 	new sql_len = 0;
+	new user_ip[32];
+	get_user_ip(owner_id, user_ip, charsmax(user_ip));
+	
+	
+	server_print("userid: %i", get_user_userid(owner_id));
+	
 	
 	get_time("%H:%M:%S", time_now, sizeof(time_now));
 	get_time("%Y-%m-%d", date_now, sizeof(date_now));
@@ -404,7 +410,7 @@ public SQLChatInsert(owner_id, owner_name[], owner_name_size, owner_team, channe
 	
 	get_user_authid(owner_id, steam_id, charsmax(steam_id));
 	
-	new sql_cols[] = "INSERT INTO chat (server_ip, username, steam_id, datetime, team, channelmsg, prefix, message, msg_color) VALUES (";
+	new sql_cols[] = "INSERT INTO chat (server_ip, username, user_ip, steam_id, datetime, team, channelmsg, prefix, message, msg_color) VALUES (";
 	
 	sql_len += formatex(sql_request[sql_len], charsmax(sql_request) - sql_len, sql_cols);
 	// __server_ip
@@ -412,6 +418,8 @@ public SQLChatInsert(owner_id, owner_name[], owner_name_size, owner_team, channe
 	// name
 	replace_string(owner_name, owner_name_size, "'", "\'");
 	sql_len += formatex(sql_request[sql_len], charsmax(sql_request) - sql_len, "'%s', ", owner_name);
+	// user ip
+	sql_len += formatex(sql_request[sql_len], charsmax(sql_request) - sql_len, "'%s', ", user_ip);
 	// steamid
 	sql_len += formatex(sql_request[sql_len], charsmax(sql_request) - sql_len, "'%s', ", steam_id);
 	// date_now
