@@ -6,15 +6,32 @@
 #pragma ctrlchar '\'
 #pragma semicolon 1
 
+enum Power {
+	Power_0 = 0,
+	Power_25,
+	Power_50,
+	Power_75,
+	Power_100
+}
+
 new const kPluginName[] = "ULTRAHC Damage Blocker";
 new const kPluginVersion[] = "0.1";
 new const kPluginAuthor[] = "Asura";
 
 new const kVaultName[] = "ultrahc_block_damage";
 
+new const kPowerString[Power][32] = {
+	"Block",
+	"25%",
+	"50%",
+	"75%",
+	"Unblock"
+};
+
 //-------------------------------------------------------
 
 #define Pre 0
+#define POWER_SLOT 6
 
 #define SetBlockDmg(%0,%1) __player_block_damage[%0] = %1
 #define IsBlockDmg(%0) __player_block_damage[%0]
@@ -137,6 +154,8 @@ RemFromVault(target_id) {
 }
 
 //-------------------------------------------------------
+//-- Take Damage
+//-------------------------------------------------------
 
 public OnTakeDamagePre(const this, pev_inflictor, pev_attacker, Float:damage, damage_type) {
 	if(IsBlockDmg(pev_attacker)) {
@@ -154,25 +173,40 @@ public OnTakeDamagePre(const this, pev_inflictor, pev_attacker, Float:damage, da
 }
 
 //-------------------------------------------------------
+//-- Menu
+//-------------------------------------------------------
 
 public OnBlockDamageMenu(adm_id, flag_level, cmd_id) {
 	if(!cmd_access(adm_id, flag_level, cmd_id, 1))
 		return PLUGIN_HANDLED;
 
-	CreateMenu(adm_id, flag_level);
+	CreateMenu(adm_id, flag_level, Power:Power_0);
 		
 	return PLUGIN_HANDLED;
 }
 
 //-------------------------------------------------------
 
-CreateMenu(adm_id, flag_level) {
+CreateMenu(adm_id, flag_level, Power:power) {
 	new menu_handler  = menu_create("Block Damage", "MenuHandler");
+	// menu_setprop(menu_handler, MPROP_EXIT, MEXIT_NEVER);
 
 	new players[MAX_PLAYERS], players_num;
 	get_players(players, players_num, "h");
 
-	for(new i=0; i < players_num; ++i) {
+	for(new i=0, j=1; i < players_num; ++i, ++j) {
+		if((j % 7) == 0) {
+			new item_name[128];
+			formatex(item_name, charsmax(item_name), "Set damage: %s", kPowerString[power]);
+
+			new power_str[6];
+			num_to_str(_:power, power_str, charsmax(power_str));
+			menu_addblank(menu_handler, 0);
+			menu_additem(menu_handler, item_name, power_str, flag_level);
+			
+			continue;
+		}
+
 		new player_name[MAX_NAME_LENGTH]; get_user_name(players[i], player_name, charsmax(player_name));
 
 		new user_uid[6];
@@ -180,11 +214,36 @@ CreateMenu(adm_id, flag_level) {
 
 		new blocked[32] = "";
 		if(IsBlockDmg(players[i])) {
-			blocked = "\\r(BLOCKED)";
+
+			new Float:dmg_perc = GetBlockDmgPerc(players[i]);
+			if(_:dmg_perc == 0) {
+				blocked = "\\r(BLOCKED)";
+			} else {
+				formatex(blocked, charsmax(blocked), "\\r(%i%%)", floatround(dmg_perc * 100));
+			}   
+
 		}
 		new item_name[128];
 		formatex(item_name, charsmax(item_name), "%s %s", player_name, blocked);
+
 		menu_additem(menu_handler, item_name, user_uid, flag_level);
+
+		if((i+1) == players_num) {
+
+			for(new k=0; k < (5-i); ++k) {
+				menu_addblank2(menu_handler);
+			}
+
+			new item_name[128];
+			formatex(item_name, charsmax(item_name), "Set damage: %s", kPowerString[power]);
+
+			new power_str[6];
+			num_to_str(_:power, power_str, charsmax(power_str));
+			menu_addblank(menu_handler, 0);
+			menu_additem(menu_handler, item_name, power_str, flag_level);
+			
+			continue;
+		}
 	}
 
 	menu_display(adm_id, menu_handler, 0);
@@ -197,7 +256,22 @@ public MenuHandler(adm_id, menu_handler, item) {
 		return PLUGIN_HANDLED;
 	}
 
-	new flag_level, item_info[8];
+	new power_as_str[8], flag_level;
+	menu_item_getinfo(menu_handler, POWER_SLOT, flag_level, power_as_str, charsmax(power_as_str));
+	new Power:power = Power:str_to_num(power_as_str);
+
+	// Из-за сдвига в 1 вниз, у нас 7 идет в 6, 14 в 13, и тд.
+	// т.е. перестают быть нулем по модулю 7
+	// поэтому сдвигаем обратно до 7, выравнвиая все
+	if(((item+1) % (POWER_SLOT+1)) == 0) {
+		if(power == Power:Power_100) power = Power:Power_0;
+		else ++power;
+
+		CreateMenu(adm_id, flag_level, power);
+		return PLUGIN_HANDLED;
+	}
+
+	new item_info[8];
 	menu_item_getinfo(menu_handler, item, flag_level, item_info, charsmax(item_info));
 
 	new user_uid[6];
@@ -206,16 +280,28 @@ public MenuHandler(adm_id, menu_handler, item) {
 	new user_idx = cmd_target(adm_id, user_uid, CMDTARGET_ALLOW_SELF);
 
 	if(!user_idx) {
-		CreateMenu(adm_id, flag_level);
+		CreateMenu(adm_id, flag_level, power);
 		return PLUGIN_HANDLED;
 	}
 
-	if(IsBlockDmg(user_idx)) {
-		amxclient_cmd(adm_id, "uhc_blockdmg_rem", user_uid);
-	} else {
-		amxclient_cmd(adm_id, "uhc_blockdmg_set", user_uid, "0");
+	switch(power) {
+		case (Power:Power_0): {
+			amxclient_cmd(adm_id, "uhc_blockdmg_set", user_uid, "0");
+		}
+		case (Power:Power_25): {
+			amxclient_cmd(adm_id, "uhc_blockdmg_set", user_uid, "0.25");
+		}
+		case (Power:Power_50): {
+			amxclient_cmd(adm_id, "uhc_blockdmg_set", user_uid, "0.5");
+		}
+		case (Power:Power_75): {
+			amxclient_cmd(adm_id, "uhc_blockdmg_set", user_uid, "0.75");
+		}
+		case (Power:Power_100): {
+			amxclient_cmd(adm_id, "uhc_blockdmg_rem", user_uid);
+		}
 	}
 
-	CreateMenu(adm_id, flag_level);
+	CreateMenu(adm_id, flag_level, power);
 	return PLUGIN_HANDLED;
 }
