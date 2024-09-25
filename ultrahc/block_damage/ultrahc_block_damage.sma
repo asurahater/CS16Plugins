@@ -140,6 +140,12 @@ RemFromVault(target_id) {
 
 public OnTakeDamagePre(const this, pev_inflictor, pev_attacker, Float:damage, damage_type) {
 	if(IsBlockDmg(pev_attacker)) {
+
+		if(_:GetBlockDmgPerc(pev_attacker) == 0) {
+			SetHookChainReturn(ATYPE_INTEGER, 0);
+			return HC_BREAK;
+		}
+
 		damage = damage * Float:GetBlockDmgPerc(pev_attacker);
 		SetHookChainArg(4, ATYPE_FLOAT, damage);
 	}
